@@ -10,22 +10,29 @@ import androidx.recyclerview.widget.RecyclerView;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.LayerDrawable;
 import android.os.Bundle;
+import android.util.Log;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.william.netflixremake.model.Movie;
+import com.william.netflixremake.model.MovieDetail;
+import com.william.netflixremake.util.ImageDownloaderTask;
+import com.william.netflixremake.util.MovieDetailTask;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class MovieActivity extends AppCompatActivity {
+public class MovieActivity extends AppCompatActivity implements MovieDetailTask.MovieDetailLoader {
 
     private TextView txtTitle;
     private TextView txtDesc;
     private TextView txtCast;
     private RecyclerView recyclerView;
+    private MovieAdapter movieAdapter;
+    private ImageView imgCover;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -36,6 +43,7 @@ public class MovieActivity extends AppCompatActivity {
         txtDesc = findViewById(R.id.text_view_desc);
         txtCast = findViewById(R.id.text_view_cast);
         recyclerView = findViewById(R.id.recycler_view_similar);
+        imgCover = findViewById(R.id.image_view_cover);
 
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
@@ -44,28 +52,37 @@ public class MovieActivity extends AppCompatActivity {
         getSupportActionBar().setHomeAsUpIndicator(R.drawable.ic_baseline_arrow_back_24);
         getSupportActionBar().setTitle(null);
 
-        LayerDrawable drawable = (LayerDrawable) ContextCompat.getDrawable(this, R.drawable.shadow);
-
-        if(drawable != null){
-            Drawable movieCover = ContextCompat.getDrawable(this, R.drawable.movie_4);
-            drawable.setDrawableByLayerId(R.id.cover_drawable, movieCover);
-            ((ImageView) findViewById(R.id.image_view_cover)).setImageDrawable(drawable);
-        }
-
-        txtTitle.setText("Batman Begins");
-        txtDesc.setText("O jovem Bruce Wayne viaja para o Extremo Oriente, onde recebe treinamento em artes marciais do mestre Henri Ducard, um membro da misteriosa Liga das Sombras. Quando Ducard revela que a verdadeira proposta da Liga é a destruição completa da cidade de Gotham, Wayne retorna à sua cidade com o intuito de livrá-la de criminosos e assassinos. Com a ajuda do mordomo Alfred e do expert Lucius Fox, nasce Batman.");
-        txtCast.setText(getString(R.string.cast,"Joao JCsi"+", Ijdiajs"+", naisdniasnna"+", jdaijdisajd"));
-
         List<Movie> movies = new ArrayList<>();
-        for(int i = 0; i < 30; i++){
-            Movie movie = new Movie();
-//                movie.setCoverUrl(R.drawable.movie);
-            movies.add(movie);
-        }
-
-        recyclerView.setAdapter(new MovieAdapter(movies));
+        movieAdapter = new MovieAdapter(movies);
+        recyclerView.setAdapter(movieAdapter);
         recyclerView.setLayoutManager(new GridLayoutManager(this, 3));
 
+        Bundle extras = getIntent().getExtras();
+        if(extras != null){
+            int id = getIntent().getIntExtra("id", 0);
+
+            if(id <= 3){
+                MovieDetailTask movieDetailTask = new MovieDetailTask(this);
+                movieDetailTask.setMovieDetailLoader(this);
+                movieDetailTask.execute("https://tiagoaguiar.co/api/netflix/"+id);
+            }
+
+        }
+
+    }
+
+    @Override
+    public void onResult(MovieDetail movieDetail) {
+        txtTitle.setText(movieDetail.getMovie().getTitle());
+        txtDesc.setText(movieDetail.getMovie().getDesc());
+        txtCast.setText(movieDetail.getMovie().getCast());
+
+        ImageDownloaderTask imageDownloaderTask = new ImageDownloaderTask(imgCover);
+        imageDownloaderTask.setShadowEnabled(true);
+        imageDownloaderTask.execute(movieDetail.getMovie().getCoverUrl());
+
+        movieAdapter.setMovies(movieDetail.getMoviesSimilar());
+        movieAdapter.notifyDataSetChanged();
     }
 
     private static class MovieHolder extends RecyclerView.ViewHolder{
@@ -80,10 +97,15 @@ public class MovieActivity extends AppCompatActivity {
 
     private class MovieAdapter extends RecyclerView.Adapter<MovieHolder>{
 
-        private final List<Movie> movies;
+        private List<Movie> movies;
 
         private MovieAdapter(List<Movie> movies){
             this.movies = movies;
+        }
+
+        public void setMovies(List<Movie> movies){
+            this.movies.clear();
+            this.movies.addAll(movies);
         }
 
         @NonNull
@@ -95,6 +117,7 @@ public class MovieActivity extends AppCompatActivity {
         @Override
         public void onBindViewHolder(@NonNull MovieHolder holder, int position) {
             Movie movie = movies.get(position);
+            new ImageDownloaderTask(holder.imageViewUrl).execute(movie.getCoverUrl());
 //            holder.imageViewUrl.setImageResource(movie.getCoverUrl());
         }
 
@@ -104,4 +127,13 @@ public class MovieActivity extends AppCompatActivity {
         }
     }
 
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if (item.getItemId() == android.R.id.home) {
+            onBackPressed();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+
+    }
 }
